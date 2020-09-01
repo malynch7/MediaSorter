@@ -5,69 +5,100 @@ import re
 from imdb import IMDb
 
 # Default Parameters
-inputDirectory = "Input\\"
-outputDirectory = "Output\\"
-acceptedFormats = [".mp4", ".srt", ".mkv", ".avi", ".flv", ".wmv", ".mov"]
+INPUT_DIRECTORY = "Input\\"
+OUTPUT_DIRECTORY = "Output\\"
+TV_REGEX = "(.*)s(\d{1,2})(e\d{1,2})"
+MOVIE_REGEX = "(.*?)(1080p|720p|x264|aac|ac3|dvd|xvid|cd\d|\.\w\w\w$)+"
 
 
-# Get list of files and paths
-inputFiles = []  # [full path, filename]
-for r, d, f in os.walk(inputDirectory):
-    for file in f:
-        inputFiles.append([os.path.join(r, file), file])
+def main():
+    input_files = get_input_files()
 
-# IMDB search and get destination directory
-ia = IMDb()
-destinations = []
-errors = []
-for file in inputFiles:
-    if file[1].lower().endswith(tuple(acceptedFormats)):
-
-        # TV Shows
-        regexResults = re.match("(.*)s(\d{1,2})(e\d{1,2})", file[1].lower())
-        if regexResults:
-            imdbResults = ia.search_movie(regexResults.group(1))
-            if imdbResults:
-                destinations.append("TV Shows\\" + imdbResults[0]['title'] + "\\Season " + regexResults.group(2))
-                errors.append("")
-            else:
-                destinations.append("Unsorted")
-                errors.append("No title returned (TV Show).")
-
-        # Movies
+    for file in input_files:
+        if not file_is_accepted_format(file):
+            file.destination = "unsorted"
+            file.error_string = "Unsupported File Format"
+        regex_results = re.match(TV_REGEX, file.filename.lower())
+        if regex_results:
+            file_tmp = get_sorted_tv_destination(file, regex_results)
+            file.destination = file_tmp.destination
+            file.error_string = file_tmp.error_string
         else:
-            regexResults = re.match("(.*?)(1080p|720p|x264|aac|ac3|dvd|xvid|cd\d|\.\w\w\w$)+", file[1].lower())
-            if regexResults:
-                imdbResults = ia.search_movie(regexResults.group(1))
-                if imdbResults:
-                    destinations.append("Movies\\" + imdbResults[0]['title'])
-                    errors.append("")
-                else:
-                    destinations.append("Unsorted")
-                    errors.append("No title returned (Movie).")
+            regex_results = re.match(MOVIE_REGEX, file.filename.lower())
+            if regex_results:
+                file_tmp = get_sorted_movie_destination(file, regex_results)
+                file.destination = file_tmp.destination
+                file.error_string = file_tmp.error_string
             else:
-                destinations.append("Unsorted")
-                errors.append("Failed Regex")
+                file.destination = "unsorted"
+                file.error_string = "Failed Regex Match"
 
+    move_files_to_destinations(input_files)
+
+
+class MediaFile:
+    def __init__(self, full_path, filename):
+        self.full_path = full_path
+        self.filename = filename
+        self.destination = ""
+        self.error_string = ""
+
+
+def get_sorted_tv_destination(file, regex_results):
+    ia = IMDb()
+    imdb_results = ia.search_movie(regex_results.group(1))
+    if imdb_results:
+        file.destination = "TV Shows\\" + imdb_results[0]['title'] + "\\Season " + regex_results.group(2)
     else:
-        destinations.append("Unsorted")
-        errors.append("Unsupported File Format")
+        file.destination = "unsorted"
+        file.error_string = "No title returned (TV Show)."
+    return file
 
-# Move Files
-index = 0
-with open(outputDirectory + "\\SorterLog.txt", "a") as log:
-    log.write("\n\n" + str(datetime.datetime.now()) + "\n")
-    for file in inputFiles:
-        # Log Results
-        error = "         "
-        if errors[index] != "":
-            error = "ERROR: " + errors[index] + "    "
-            log.write(error + file[0] + "    -->    " + destinations[index] + "\n")
-        else:
-            log.write(error + file[0] + "    -->    " + outputDirectory + destinations[index] + "\\" + file[1] + "\n")
-        # print(file[0] + "    -->    " + outputDirectory + destinations[index] + "\\" + file[1] + error)
 
-        # Move
-        # if destinations[index] != "Unsorted":
-        #     shutil.move(file[0], outputDirectory + destinations[index] + "\\" + file[1])
-        index = index + 1
+def get_sorted_movie_destination(file, regex_results):
+    ia = IMDb()
+    imdb_results = ia.search_movie(regex_results.group(1))
+    if imdb_results:
+        file.destination = "Movies\\" + imdb_results[0]['title']
+    else:
+        file.destination = "unsorted"
+        file.error_string = "No title returned (Movie)."
+    return file
+
+
+def move_files_to_destinations(input_files):
+    index = 0
+    with open(OUTPUT_DIRECTORY + "\\SorterLog.txt", "a") as log:
+        log.write("\n\n" + str(datetime.datetime.now()) + "\n")
+        for file in input_files:
+            # Log Results
+            error = "         "
+            if file.error_string != "":
+                error = "ERROR: " + file.error_string + "    "
+                log.write(error + file.full_path + "    -->    " + file.destination + "\n")
+            else:
+                log.write(error + file.full_path + "    -->    " + OUTPUT_DIRECTORY + file.destination + "\\"
+                          + file.filename + "\n")
+            # print(file[0] + "    -->    " + outputDirectory + destinations[index] + "\\" + file[1] + error)
+
+            # Move
+            # if destinations[index] != "Unsorted":
+            #     shutil.move(file[0], outputDirectory + destinations[index] + "\\" + file[1])
+            index = index + 1
+
+
+def get_input_files():
+    input_files = []
+    for r, d, f in os.walk(INPUT_DIRECTORY):
+        for file in f:
+            input_files.append(MediaFile(os.path.join(r, file), file))
+    return input_files
+
+
+def file_is_accepted_format(input_file):
+    accepted_formats = [".mp4", ".srt", ".mkv", ".avi", ".flv", ".wmv", ".mov"]
+    return input_file.filename.lower().endswith(tuple(accepted_formats))
+
+
+if __name__ == '__main__':
+    main()
