@@ -13,25 +13,20 @@ MOVIE_REGEX = "(.*?)(1080p|720p|x264|aac|ac3|dvd|xvid|cd\d|\.\w\w\w$)+"
 
 def main():
     input_files = get_input_files()
-
-    for file in input_files:
-        if not file_is_accepted_format(file):
-            file.destination = "unsorted"
-            file.error_string = "Unsupported File Format"
-        regex_results = re.match(TV_REGEX, file.filename.lower())
+    for i in range(len(input_files)):
+        if not file_is_accepted_format(input_files[i]):
+            input_files[i].destination = "unsorted"
+            input_files[i].error_string = "Unsupported File Format"
+        regex_results = re.match(TV_REGEX, input_files[i].filename.lower())
         if regex_results:
-            file_tmp = get_sorted_tv_destination(file, regex_results)
-            file.destination = file_tmp.destination
-            file.error_string = file_tmp.error_string
+            input_files[i] = get_sorted_tv_destination(input_files[i], regex_results)
         else:
-            regex_results = re.match(MOVIE_REGEX, file.filename.lower())
+            regex_results = re.match(MOVIE_REGEX, input_files[i].filename.lower())
             if regex_results:
-                file_tmp = get_sorted_movie_destination(file, regex_results)
-                file.destination = file_tmp.destination
-                file.error_string = file_tmp.error_string
+                input_files[i] = get_sorted_movie_destination(input_files[i], regex_results)
             else:
-                file.destination = "unsorted"
-                file.error_string = "Failed Regex Match"
+                input_files[i].destination = "unsorted"
+                input_files[i].error_string = "Failed Regex Match"
 
     move_files_to_destinations(input_files)
 
